@@ -60,7 +60,13 @@ Other scripts for other levels can be found on the [wiki](https://strategywiki.o
 
 ## Scripts
 
-Scripts are text files provided by the game. In any level, click the "Copy" button to copy your script as text file.
+Scripts are text files provided by the game. In any level, click the "Copy" button to copy your script as text file. However, slightly different formats can be supported, so here are the different assumptions made by the parser:
+- A line starting with "--" is ignored
+- A line with the command "COMMENT" is ignored
+- The parsing stops at the first "DEFINE" command. In the game, the following lines are used to define labels (which are drawing) for comments and memory tiles. The interpreter doesn't need them, so they are ignored, and as far as I know, they are always at the end of the script.
+- Multiple spaces are the same as one space
+- Indents are ignored
+- ":" character is used for and only for jump destinations
 
 ## FAQ
 
