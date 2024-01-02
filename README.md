@@ -41,11 +41,22 @@ Options:
                                                             Default: no (theoretical) maximum
 ```
 
-Example:
+_NB_: I chose to use the maximum **address** and not the length of the memory - the latter being more common in the programming world. That's because I think it's easier to look at the last tile number in-game than to always remember to add one when switching to this interpreter.
 
-```bash
-./hrm-interpreter.exe script.txt 1 2 a 4 f
-```
+### Sample scripts
+
+In the `samples` folder, you'll find some sample scripts from the game. You can run them with the interpreter to see what they do.
+Here are the commands to run them (with `cargo run`, but you can also directly use the `.exe`):
+
+* `cargo run --release -- ./samples/01-MailRoom.hrm -i 6 5 6`
+* `cargo run --release -- ./samples/06-RainySummer.hrm -i 0 4 7 3 -5 1 -M 2`
+* `cargo run --release -- ./samples/20-MultiplicationWorkshop.hrm -i 4 3 4 1 9 0 0 1 7 8 -m 9 0 -M 9`
+* `cargo run --release -- ./samples/30-StringStorageFloor.hrm -i 4 15 7 0 20 17 11 21 2 13 4 17 20 -m ./samples/mem/30-mem.txt -M 24`
+* `cargo run --release -- ./samples/41-SortingRoom.hrm -i 71 26 65 0 A L I V E 0 35 74 69 90 67 72 65 74 84 14 0 86 0 -m 24 0 -M 24`
+
+In these commands I provided the inputs and memory constraints as described in the game. Scripts are mine :)
+
+Other scripts for other levels can be found on the [wiki](https://strategywiki.org/wiki/Human_Resource_Machine).
 
 ## Scripts
 
@@ -60,10 +71,10 @@ Why not? It seemed like a fun project to do in Rust.
 ### How can I use the interpreter to help me with the game?
 
 In the game you can click the "Copy" button to copy your script as a text file. You can then run it with the interpreter to see what it does.
-In the interpreter, you can, contrary to the game:
+In the interpreter, you **can**, contrary to the game:
 - Control the input
 - Run the script really fast (the game has a speed limit)
-But you can't, contrary to the game:
+But you **cannot**, contrary to the game:
 - Run the script step by step
 - Visualize the memory
 
@@ -71,5 +82,5 @@ You can also modify the script, test it, and paste it back in the game.
 
 ### So I can program my scripts outside of the game?
 
-I guess! You'll still need to check the game levels to know your memory constraints, but you can write your scripts in your favorite editor. There are also some vscode plugins that can help you with that
+I guess! You'll still need to check the game levels to know your inputs and memory constraints, but you can write your scripts in your favorite editor. There are also some vscode plugins that can help you with that
 (like [this](https://marketplace.visualstudio.com/items?itemName=grub4k.hrm-language) or [that](https://marketplace.visualstudio.com/items?itemName=jasonwthompson.human-resource-machine-language-support), though I haven't tried them).
