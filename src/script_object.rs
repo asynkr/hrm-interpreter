@@ -6,12 +6,17 @@ pub mod value_box;
 use instruction::Instruction;
 
 #[derive(Debug)]
+/// The ScriptObject is the representation of the script.
+/// It doesn't execute itself, nor it holds the state of the program.
+/// It's a transcription of the text file that can be read by the interpreter.
 pub struct ScriptObject {
     blocks: Vec<Block>,
     blocks_map: HashMap<String, usize>,
 }
 
 #[derive(Debug, PartialEq)]
+/// A block is a set of instructions after a "jump point".
+/// In a program without jumps, there is only one unnamed block.
 pub struct Block {
     name: String,
     index: usize,
@@ -209,5 +214,55 @@ mod test {
         let script_object = ScriptObject::from_str(script).unwrap();
 
         assert!(!script_object.all_jumps_have_valid_anchors());
+    }
+
+    #[test]
+    fn test_script_empty_block() {
+        let script = "-- HUMAN RESOURCE MACHINE PROGRAM --
+
+        a:
+        b:
+            JUMPZ    b
+            JUMP     a
+        c:
+            JUMPN    b
+        
+        ";
+        let script_object = ScriptObject::from_str(script).unwrap();
+
+        assert!(script_object.get_block_by_label("a").is_some());
+        assert!(script_object
+            .get_block_by_label("a")
+            .unwrap()
+            .instructions
+            .is_empty());
+    }
+
+    #[test]
+    fn test_script_get_next() {
+        let script = "-- HUMAN RESOURCE MACHINE PROGRAM --
+
+        a:
+        b:
+            COPYTO   0
+            JUMP     a
+        c:
+            JUMPN    b
+        
+        ";
+        let script_object = ScriptObject::from_str(script).unwrap();
+
+        assert_eq!(
+            script_object.get_next(script_object.get_block_by_label("a").unwrap()),
+            Some(script_object.get_block_by_label("b").unwrap())
+        );
+        assert_eq!(
+            script_object.get_next(script_object.get_block_by_label("b").unwrap()),
+            Some(script_object.get_block_by_label("c").unwrap())
+        );
+        assert_eq!(
+            script_object.get_next(script_object.get_block_by_label("c").unwrap()),
+            None
+        );
     }
 }

@@ -4,28 +4,41 @@ use std::{error::Error, str::FromStr};
 use super::value_box;
 
 type VBMA = value_box::ValueBoxMemAddress;
-type Anchor = String;
+type BlockKey = String;
 
 #[derive(Debug, PartialEq)]
+/// An instruction is a line of code in the script.
+/// It holds the operation and sometimes some additional data.
+/// The rust enum structure is perfect for this.
+///
+/// In this implementation, the instruction doesn't describe how it should be executed,
+/// that's the job of the interpreter.
 pub enum Instruction {
-    // I/O
+    /// Read the next input ValueBox from the input belt
     In,
+    /// Drop the head on the output belt
     Out,
 
-    // COPY
+    /// Copy the value at the given memory address to the head
     CopyFrom(VBMA),
+    /// Copy the head to the given memory address
     CopyTo(VBMA),
 
-    // MATH
+    /// Add the value at the given memory address to the head
     Add(VBMA),
+    /// Subtract the value at the given memory address from the head
     Sub(VBMA),
+    /// Add 1 to the value at the given memory address. The result is written at the same address AND in the head.
     BumpUp(VBMA),
+    /// Subtract 1 to the value at the given memory address. The result is written at the same address AND in the head.
     BumpDown(VBMA),
 
-    // JUMP
-    Jump(Anchor),
-    JumpIfZero(Anchor),
-    JumpIfNegative(Anchor),
+    /// Jump to the given bock
+    Jump(BlockKey),
+    /// Jump to the given block if the head is zero
+    JumpIfZero(BlockKey),
+    /// Jump to the given block if the head is (strictly) negative
+    JumpIfNegative(BlockKey),
 }
 
 impl FromStr for Instruction {
@@ -62,7 +75,7 @@ impl FromStr for Instruction {
 }
 
 #[cfg(test)]
-mod tests {
+mod instruction_tests {
     use super::*;
 
     #[test]

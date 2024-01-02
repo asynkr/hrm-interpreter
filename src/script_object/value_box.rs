@@ -2,6 +2,8 @@ use std::{error::Error, str::FromStr};
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 /// Wrapper for a value that can be stored in memory.
+/// The name comes from the fact that in HRM, the values are like cardboard boxes.
+/// A ValueBox can be either a number or a character.
 pub enum ValueBox {
     Number(i32),
     Character(char),
@@ -9,7 +11,14 @@ pub enum ValueBox {
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 /// Wrapper for a memory address.
-/// Can be either a direct memory address or a pointer at which the memory address is stored.
+/// It can be either a direct memory address or a pointer at which the memory address is stored.
+///
+/// Ex:
+/// - "Copy from 2" uses Pointer(2)
+/// and means "Copy from the value at memory address 2"
+/// - "Copy from \[2]" uses PointerAddress(2)
+/// and means "Copy from the value at the memory address stored at memory address 2",
+/// ie "Read the value at memory address 2, and use it as a memory address to read the desired value from"
 pub enum ValueBoxMemAddress {
     Pointer(usize),
     PointerAddress(usize),
@@ -55,25 +64,6 @@ impl FromStr for ValueBoxMemAddress {
             let address = s.parse::<usize>()?;
 
             Ok(Self::Pointer(address))
-        }
-    }
-}
-
-impl ValueBoxMemAddress {
-    pub fn get_address(&self, memory: &[Option<ValueBox>]) -> Result<usize, Box<dyn Error>> {
-        match self {
-            Self::Pointer(address) => Ok(*address),
-            Self::PointerAddress(pointer_address) => {
-                let address = memory.get(*pointer_address);
-                if let Some(Some(ValueBox::Number(n))) = address {
-                    if n < &0 {
-                        return Err(format!("Value in memory at {pointer_address} is not a valid memory address ({n})").into());
-                    }
-                    Ok(*n as usize)
-                } else {
-                    Err(format!("There is no value in memory at address {pointer_address}").into())
-                }
-            }
         }
     }
 }
@@ -139,25 +129,5 @@ mod vbma_tests {
     #[should_panic]
     fn test_value_box_mem_address_from_str_with_negative_number() {
         let _address = ValueBoxMemAddress::from_str("[-25]").unwrap();
-    }
-
-    #[test]
-    fn test_value_box_mem_address_get_address() {
-        let memory = vec![Some(ValueBox::Number(42)), Some(ValueBox::Number(1))];
-
-        let vbma = ValueBoxMemAddress::Pointer(0);
-        let address = vbma.get_address(&memory).unwrap();
-
-        assert_eq!(address, 0);
-    }
-
-    #[test]
-    fn test_value_box_mem_pointer_address_get_address() {
-        let memory = vec![Some(ValueBox::Number(42)), Some(ValueBox::Number(1))];
-
-        let vbma = ValueBoxMemAddress::PointerAddress(1);
-        let address = vbma.get_address(&memory).unwrap();
-
-        assert_eq!(address, 1);
     }
 }

@@ -1,50 +1,46 @@
 use crate::script_object::{instruction::Instruction, value_box::ValueBox, Block, ScriptObject};
 
+pub mod memory;
+
+use self::memory::Memory;
+
+/// The interpreter is the component that executes the script.
+/// It holds the state of the program.
 pub struct Interpreter {
-    memory: Vec<Option<ValueBox>>,
-    max_memory_size: usize,
+    /// The tiles on the floor where ValueBoxes can be placed
+    memory: Memory,
+    /// The eventual ValueBox held by the character
     head: Option<ValueBox>,
+    /// The index of the next input ValueBox to be read
     next_input: usize,
 }
 
+/// All the possible things that can happen after executing an instruction
 enum InstructionResult {
+    /// A jump instruction was executed
     JumpBlock(String),
+    /// The instruction was successfully executed, read the next one
     NextInstruction,
+    /// The program has terminated.
+    /// (Can happen if an INBOX instruction is executed with no more inputs to read)
     Terminate,
 }
 
+/// All the possible things that can happen after executing a block
 enum BlockResult {
+    /// A jump instruction was executed inside the block
     JumpBlock(String),
+    /// The block reached its end, go to the next one
     NextBlock,
+    /// The program has terminated.
     Terminate,
 }
 
-// Initializzation methods
-impl Default for Interpreter {
-    fn default() -> Self {
-        Self {
-            memory: vec![],
-            max_memory_size: usize::MAX,
-            head: None,
-            next_input: 0,
-        }
-    }
-}
-
+// Initialization methods
 impl Interpreter {
-    pub fn with_memory(memory: Vec<Option<ValueBox>>, max_memory_size: usize) -> Self {
+    pub fn new(memory: Memory) -> Self {
         Self {
             memory,
-            max_memory_size,
-            head: None,
-            next_input: 0,
-        }
-    }
-
-    pub fn with_memory_size(memory_size: usize) -> Self {
-        Self {
-            memory: vec![None; memory_size],
-            max_memory_size: memory_size,
             head: None,
             next_input: 0,
         }
@@ -119,9 +115,9 @@ impl Interpreter {
                 None => panic!("No value in head"),
             },
             Instruction::CopyFrom(vbma) => {
-                let address = vbma.get_address(&self.memory).unwrap();
-                if let Some(value) = self.memory.get(address) {
-                    self.head = *value;
+                let address = self.memory.get_valid_address(vbma).unwrap();
+                if let Some(value) = self.memory.get(&address) {
+                    self.head = Some(*value);
                     InstructionResult::NextInstruction
                 } else {
                     panic!("No value in memory at address {}", address);
@@ -132,19 +128,9 @@ impl Interpreter {
                     panic!("No value in head");
                 }
 
-                let address = vbma.get_address(&self.memory).unwrap();
-                if let Some(value) = self.memory.get_mut(address) {
-                    *value = self.head;
-                    InstructionResult::NextInstruction
-                } else if address < self.max_memory_size {
-                    // expand memory
-                    self.memory.resize(address + 1, None);
-                    // set value
-                    self.memory[address] = self.head;
-                    InstructionResult::NextInstruction
-                } else {
-                    panic!("{} is out of the memory bounds", address);
-                }
+                let address = self.memory.get_valid_address(vbma).unwrap();
+                self.memory.set(&address, self.head);
+                InstructionResult::NextInstruction
             }
 
             Instruction::Add(_) => todo!(),
