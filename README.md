@@ -18,15 +18,28 @@ You can also take the `.exe` directly from the [releases](https://github.com/asy
 
 ### Binary
 
-> TO COMPLETE
-
 Once you have your `.exe`, you can run it with the following command (assuming you're in the same directory. And on Windows.):
 
 ```bash
-./hrm-interpreter.exe <script> <input>
+./hrm-interpreter.exe <script> [options]
 ```
 
-Where `<script>` is the path to the script file, and `<input>` is the input to the script, as list of elements separated by spaces.
+Where `<script>` is the path to the script file. The options are (also described in the `--help` command):
+```
+Human Resource Machine interpreter
+Get this help: hrm-interpreter.exe -h | --help
+Usage:         hrm-interpreter.exe <script_file> [options]
+Options:
+  -i, --inputs <value> <value>...                         sets the values to be used as input
+                                                            Example: -i 10 20 30 A E F
+                                                            Default: no input values
+  -m, --memory <address> <value>... | <memory_file>       sets the values to be used as memory
+                                                            Example: -m 0 10 1 A 2 30 | -m memory.txt
+                                                            Default: no starting memory values
+  -M, --max-mem <max_address>                             sets the maximum memory address. That's the last tile number in the game.
+                                                            Example: -M 24
+                                                            Default: no (theoretical) maximum
+```
 
 Example:
 
