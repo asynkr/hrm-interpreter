@@ -169,9 +169,9 @@ mod test {
                 index: 1,
                 instructions: vec![
                     Instruction::In,
-                    Instruction::CopyTo(value_box::ValueBoxMemAddress::Pointer(0)),
+                    Instruction::CopyTo(value_box::ValueBoxMemoryAddress::Pointer(0)),
                     Instruction::In,
-                    Instruction::Add(value_box::ValueBoxMemAddress::Pointer(0)),
+                    Instruction::Add(value_box::ValueBoxMemoryAddress::Pointer(0)),
                     Instruction::Out,
                     Instruction::Jump("a".to_string()),
                 ],

@@ -19,7 +19,7 @@ pub enum ValueBox {
 /// - "Copy from \[2]" uses PointerAddress(2)
 /// and means "Copy from the value at the memory address stored at memory address 2",
 /// ie "Read the value at memory address 2, and use it as a memory address to read the desired value from"
-pub enum ValueBoxMemAddress {
+pub enum ValueBoxMemoryAddress {
     Pointer(usize),
     PointerAddress(usize),
 }
@@ -45,7 +45,7 @@ impl ToString for ValueBox {
     }
 }
 
-impl FromStr for ValueBoxMemAddress {
+impl FromStr for ValueBoxMemoryAddress {
     type Err = Box<dyn Error>;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -100,34 +100,34 @@ mod vbma_tests {
 
     #[test]
     fn test_value_box_mem_address_from_str() {
-        let address = ValueBoxMemAddress::from_str("42").unwrap();
+        let address = ValueBoxMemoryAddress::from_str("42").unwrap();
 
-        assert_eq!(address, ValueBoxMemAddress::Pointer(42));
+        assert_eq!(address, ValueBoxMemoryAddress::Pointer(42));
     }
 
     #[test]
     fn test_value_box_mem_address_from_str_with_brackets() {
-        let address = ValueBoxMemAddress::from_str("[42]").unwrap();
+        let address = ValueBoxMemoryAddress::from_str("[42]").unwrap();
 
-        assert_eq!(address, ValueBoxMemAddress::PointerAddress(42));
+        assert_eq!(address, ValueBoxMemoryAddress::PointerAddress(42));
     }
 
     #[test]
     fn test_value_box_mem_address_from_str_with_brackets_and_spaces() {
-        let address = ValueBoxMemAddress::from_str("[ 42  ]").unwrap();
+        let address = ValueBoxMemoryAddress::from_str("[ 42  ]").unwrap();
 
-        assert_eq!(address, ValueBoxMemAddress::PointerAddress(42));
+        assert_eq!(address, ValueBoxMemoryAddress::PointerAddress(42));
     }
 
     #[test]
     #[should_panic]
     fn test_value_box_mem_address_from_str_with_invalid_address() {
-        let _address = ValueBoxMemAddress::from_str("invalid").unwrap();
+        let _address = ValueBoxMemoryAddress::from_str("invalid").unwrap();
     }
 
     #[test]
     #[should_panic]
     fn test_value_box_mem_address_from_str_with_negative_number() {
-        let _address = ValueBoxMemAddress::from_str("[-25]").unwrap();
+        let _address = ValueBoxMemoryAddress::from_str("[-25]").unwrap();
     }
 }
