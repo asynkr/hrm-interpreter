@@ -24,6 +24,22 @@ pub enum ValueBoxMemoryAddress {
     PointerAddress(usize),
 }
 
+impl FromStr for ValueBox {
+    type Err = Box<dyn Error>;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s: &str = &s.replace(' ', "");
+        match (s.parse::<i32>(), s.len()) {
+            (Ok(value), _) => Ok(Self::Number(value)),
+            (_, 1) => {
+                let c = s.chars().next().unwrap();
+                Ok(Self::Character(c))
+            }
+            _ => Err("Invalid value box".into()),
+        }
+    }
+}
+
 impl From<i32> for ValueBox {
     fn from(value: i32) -> Self {
         Self::Number(value)

@@ -1,32 +1,25 @@
-use std::{collections::HashMap, env, fs};
-
 use interpreter::{memory::Memory, Interpreter};
-use script_object::{value_box::ValueBox, ScriptObject};
+use script_object::ScriptObject;
 
 mod cli_reader;
-mod script_object;
 mod interpreter;
+mod script_object;
 
 fn main() {
+    // Read the command line arguments
     let args = cli_reader::read_args();
 
-    // Read the script from the file
-    let file = env::args().nth(1).expect("please supply a file name");
-    let script_content = fs::read_to_string(file).expect("could not read file");
-
-    // Read the command line arguments
-    // TODO
-
     // Objects used to execute the script
-    let script_object = script_content.parse::<ScriptObject>().unwrap();
-    let memory = Memory::with_data(HashMap::new(), 10);
+    let script_object = args
+        .script_file
+        .parse::<ScriptObject>()
+        .unwrap()
+        .validate_or_panic();
+    let memory = Memory::with_data(args.memory, args.max_memory_address);
     let mut interpreter = Interpreter::new(memory);
 
     // Execute the script
-    let outputs = interpreter.execute(
-        &script_object,
-        &[ValueBox::from(-10), ValueBox::from(20), ValueBox::from(30)],
-    );
+    let outputs = interpreter.execute(&script_object, &args.input_values);
 
     // Print the outputs to stdout
     print!(

@@ -235,7 +235,6 @@ mod test_instructions_execution {
 
     use super::*;
     use crate::script_object::value_box::ValueBoxMemoryAddress;
-    use crate::script_object::ScriptObject;
 
     #[test]
     fn test_inbox() {

@@ -55,6 +55,13 @@ impl ScriptObject {
         self.get_block_by_index(curr_index + 1)
     }
 
+    pub fn validate_or_panic(self) -> Self {
+        if !self.all_jumps_have_valid_anchors() {
+            panic!("Some jumps have invalid anchors");
+        }
+        self
+    }
+
     fn all_jumps_have_valid_anchors(&self) -> bool {
         let instructions = self
             .blocks

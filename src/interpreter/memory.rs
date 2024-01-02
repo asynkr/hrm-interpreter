@@ -32,13 +32,6 @@ impl Memory {
         Self { data, max_address }
     }
 
-    pub fn with_max_address(max_address: usize) -> Self {
-        Self {
-            data: HashMap::new(),
-            max_address,
-        }
-    }
-
     pub fn get(&self, address: &usize) -> Option<&ValueBox> {
         self.data.get(address)
     }
@@ -111,7 +104,7 @@ mod memory_tests {
 
     #[test]
     fn test_memory_can_set() {
-        let memory = Memory::with_max_address(10);
+        let memory = Memory::default();
 
         assert!(memory.can_set(&1));
         assert!(memory.can_set(&0));
@@ -120,7 +113,7 @@ mod memory_tests {
 
     #[test]
     fn test_memory_set() {
-        let mut memory = Memory::with_max_address(10);
+        let mut memory = Memory::default();
         memory.set(&1, Some(ValueBox::from(42)));
 
         assert_eq!(memory.get(&1), Some(&ValueBox::from(42)));
@@ -128,7 +121,7 @@ mod memory_tests {
 
     #[test]
     fn test_memory_set_none() {
-        let mut memory = Memory::with_max_address(10);
+        let mut memory = Memory::default();
         memory.set(&1, Some(ValueBox::from(42)));
         memory.set(&1, None);
 
@@ -138,7 +131,8 @@ mod memory_tests {
     #[test]
     #[should_panic]
     fn test_memory_set_out_of_bounds() {
-        let mut memory = Memory::with_max_address(10);
+        let mut memory = Memory::default();
+        memory.max_address = 10;
         memory.set(&11, Some(ValueBox::from(42)));
     }
 }

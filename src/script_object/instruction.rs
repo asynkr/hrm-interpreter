@@ -54,6 +54,7 @@ impl FromStr for Instruction {
             );
         }
 
+        #[allow(clippy::get_first)]
         let instruction_key = *parts.get(0).unwrap();
         let address_key = parts.get(1).cloned();
 
