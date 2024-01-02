@@ -231,3 +231,67 @@ pub fn read_args() -> CommandLineArgs {
 
     command_line_args
 }
+
+#[cfg(test)]
+mod cli_tests {
+    use super::*;
+
+    #[test]
+    fn test_input_values_from_args() {
+        let args = vec!["10", "20", "30", "A", "E", "F"];
+        let args = args.iter().map(|s| s.to_string()).collect();
+
+        let option = CommandLineOption::InputValues;
+        let mut command_line_args = CommandLineArgs::default("".to_string());
+
+        option.handle_args(&args, &mut command_line_args);
+
+        assert_eq!(
+            command_line_args.input_values,
+            vec![
+                ValueBox::Number(10),
+                ValueBox::Number(20),
+                ValueBox::Number(30),
+                ValueBox::Character('A'),
+                ValueBox::Character('E'),
+                ValueBox::Character('F'),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_memory_from_args() {
+        let args = vec!["0", "10", "1", "A", "2", "30", "10", "-5"];
+        let args = args.iter().map(|s| s.to_string()).collect();
+
+        let option = CommandLineOption::Memory;
+        let mut command_line_args = CommandLineArgs::default("".to_string());
+
+        option.handle_args(&args, &mut command_line_args);
+
+        assert_eq!(
+            command_line_args.memory,
+            vec![
+                (0, ValueBox::Number(10)),
+                (1, ValueBox::Character('A')),
+                (2, ValueBox::Number(30)),
+                (10, ValueBox::Number(-5)),
+            ]
+            .into_iter()
+            .collect::<HashMap<usize, ValueBox>>()
+        );
+    }
+
+    #[test]
+    fn test_max_memory_address_from_args() {
+        let args = vec!["24"];
+        let args = args.iter().map(|s| s.to_string()).collect();
+
+        let option = CommandLineOption::MaxMemoryAddress;
+        let mut command_line_args = CommandLineArgs::default("".to_string());
+
+        option.handle_args(&args, &mut command_line_args);
+
+        assert_eq!(command_line_args.max_memory_address, 24);
+    }
+}

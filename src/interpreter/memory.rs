@@ -104,7 +104,8 @@ mod memory_tests {
 
     #[test]
     fn test_memory_can_set() {
-        let memory = Memory::default();
+        let mut memory = Memory::default();
+        memory.max_address = 10;
 
         assert!(memory.can_set(&1));
         assert!(memory.can_set(&0));
