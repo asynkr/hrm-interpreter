@@ -3,10 +3,13 @@ use std::{collections::HashMap, env, fs};
 use interpreter::{memory::Memory, Interpreter};
 use script_object::{value_box::ValueBox, ScriptObject};
 
-mod interpreter;
+mod cli_reader;
 mod script_object;
+mod interpreter;
 
 fn main() {
+    let args = cli_reader::read_args();
+
     // Read the script from the file
     let file = env::args().nth(1).expect("please supply a file name");
     let script_content = fs::read_to_string(file).expect("could not read file");
