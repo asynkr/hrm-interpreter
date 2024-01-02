@@ -176,6 +176,7 @@ impl Interpreter {
                         return InstructionResult::JumpBlock(block_key.clone());
                     }
                 }
+                Some(ValueBox::Character(_)) => {} // Characters are never equal to 0
                 _ => panic!(
                     "Cannot test IfZero if head ({:?}) is not a valid number",
                     self.head
@@ -187,6 +188,7 @@ impl Interpreter {
                         return InstructionResult::JumpBlock(block_key.clone());
                     }
                 }
+                Some(ValueBox::Character(_)) => {} // Characters are never negative
                 _ => panic!(
                     "Cannot test IfNegative if head ({:?}) is not a valid number",
                     self.head

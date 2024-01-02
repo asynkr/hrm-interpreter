@@ -114,6 +114,8 @@ impl CommandLineOption {
                     let memory_file = option_args.first().unwrap().clone();
                     let memory_content = fs::read_to_string(memory_file.clone())
                         .unwrap_or_else(|_| panic!("Could not read file {}", memory_file));
+                    dbg!(memory_content.clone());
+                    let memory_content = memory_content.lines().collect::<Vec<&str>>().join(" ");
                     memory_content
                         .split(' ')
                         .map(|s| s.to_string())
@@ -174,7 +176,10 @@ fn print_help() {
 pub fn read_args() -> CommandLineArgs {
     let mut args = env::args().skip(1);
 
-    let first_arg = args.next().expect("please supply a script file name");
+    let first_arg = args.next().unwrap_or_else(|| {
+        print_help();
+        std::process::exit(1);
+    });
 
     if first_arg == "-h" || first_arg == "--help" {
         print_help();
