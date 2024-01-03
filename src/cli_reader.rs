@@ -114,7 +114,6 @@ impl CommandLineOption {
                     let memory_file = option_args.first().unwrap().clone();
                     let memory_content = fs::read_to_string(memory_file.clone())
                         .unwrap_or_else(|_| panic!("Could not read file {}", memory_file));
-                    dbg!(memory_content.clone());
                     let memory_content = memory_content.lines().collect::<Vec<&str>>().join(" ");
                     memory_content
                         .split(' ')

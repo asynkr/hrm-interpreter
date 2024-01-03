@@ -1,9 +1,10 @@
+use std::str::FromStr;
+
 use collapse::collapse;
-use std::{error::Error, str::FromStr};
 
-use super::value_box;
+use super::value_box::{self, ParseValueBoxMemoryAddressError};
 
-type ValBoxMemAddr = value_box::ValueBoxMemoryAddress;
+use value_box::ValueBoxMemoryAddress as ValBoxMemAddr;
 type BlockKey = String;
 
 #[derive(Debug, PartialEq)]
@@ -41,17 +42,27 @@ pub enum Instruction {
     JumpIfNegative(BlockKey),
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum ParseInstructionError {
+    #[error("too much parts in the instruction line, expected 2 at most, got {}", .0.len())]
+    TooMuchParts(Vec<String>),
+    #[error("{0} is not a valid instruction")]
+    InvalidInstruction(String),
+    #[error("instruction has an invalid memory address:\n\t{0}")]
+    InvalidMemoryAddress(#[from] ParseValueBoxMemoryAddressError),
+}
+
 impl FromStr for Instruction {
-    type Err = Box<dyn Error>;
+    type Err = ParseInstructionError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s: &str = &collapse(s);
         let parts = s.split_whitespace().collect::<Vec<&str>>();
 
         if parts.len() > 2 {
-            return Err(
-                "Instruction line must have at most two parts separated by white spaces".into(),
-            );
+            return Err(Self::Err::TooMuchParts(
+                parts.iter().map(|s| s.to_string()).collect(),
+            ));
         }
 
         #[allow(clippy::get_first)]
@@ -70,7 +81,7 @@ impl FromStr for Instruction {
             ("JUMP", Some(akey)) => Ok(Instruction::Jump(akey.to_string())),
             ("JUMPZ", Some(akey)) => Ok(Instruction::JumpIfZero(akey.to_string())),
             ("JUMPN", Some(akey)) => Ok(Instruction::JumpIfNegative(akey.to_string())),
-            _ => Err("Invalid instruction".into()),
+            _ => Err(Self::Err::InvalidInstruction(s.to_string())),
         }
     }
 }

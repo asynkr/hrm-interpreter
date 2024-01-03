@@ -1,4 +1,4 @@
-use std::{error::Error, str::FromStr};
+use std::str::FromStr;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 /// Wrapper for a value that can be stored in memory.
@@ -24,18 +24,24 @@ pub enum ValueBoxMemoryAddress {
     PointerAddress(usize),
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum ParseValueBoxError {
+    #[error("{0} is not a number nor a single character")]
+    TooManyCharacters(String),
+}
+
 impl FromStr for ValueBox {
-    type Err = Box<dyn Error>;
+    type Err = ParseValueBoxError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s: &str = &s.replace(' ', "");
         match (s.parse::<i32>(), s.len()) {
             (Ok(value), _) => Ok(Self::Number(value)),
-            (_, 1) => {
+            (Err(_), 1) => {
                 let c = s.chars().next().unwrap();
                 Ok(Self::Character(c))
             }
-            _ => Err("Invalid value box".into()),
+            _ => Err(Self::Err::TooManyCharacters(s.to_string())),
         }
     }
 }
@@ -61,25 +67,32 @@ impl ToString for ValueBox {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum ParseValueBoxMemoryAddressError {
+    #[error("error parsing '{0}' as a pointer (should be a positive integer):\n\t{1}")]
+    InvalidPointer(String, #[source] std::num::ParseIntError),
+    #[error("error parsing '{0}' as a pointer address (should be a positive integer between brackets: [10]):\n\t{0}")]
+    InvalidPointerAddress(String, #[source] std::num::ParseIntError),
+}
+
 impl FromStr for ValueBoxMemoryAddress {
-    type Err = Box<dyn Error>;
+    type Err = ParseValueBoxMemoryAddressError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // remove whitespaces characters
         let s: &str = &s.replace(' ', "");
 
         if s.starts_with('[') && s.ends_with(']') {
-            let s = s.trim_start_matches('[').trim_end_matches(']');
-            let s = s.trim();
+            let s_without_brackets = s.trim_start_matches('[').trim_end_matches(']').trim();
 
-            match s.parse::<usize>() {
-                Ok(address) => Ok(Self::PointerAddress(address)),
-                Err(_) => Err("Invalid memory address".into()),
-            }
+            s_without_brackets
+                .parse::<usize>()
+                .map(Self::PointerAddress)
+                .map_err(|e| Self::Err::InvalidPointerAddress(s.to_string(), e))
         } else {
-            let address = s.parse::<usize>()?;
-
-            Ok(Self::Pointer(address))
+            s.parse::<usize>()
+                .map(Self::Pointer)
+                .map_err(|e| Self::Err::InvalidPointer(s.to_string(), e))
         }
     }
 }

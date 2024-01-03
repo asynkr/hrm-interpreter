@@ -1,4 +1,4 @@
-use std::{collections::HashMap, error::Error};
+use std::collections::HashMap;
 
 use crate::script_object::value_box::{ValueBox, ValueBoxMemoryAddress};
 
@@ -18,6 +18,22 @@ impl Default for Memory {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum GetMemoryError {
+    #[error("no value at address {0} given by {1:?}")]
+    NoValueAtAddress(usize, ValueBoxMemoryAddress),
+    #[error("invalid value box memory address:\n\t{0}")]
+    InvalidValueBoxMemoryAddress(#[from] ReadValueBoxMemoryAddressError),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum SetMemoryError {
+    #[error("Memory address {address} out of bounds (accepted: [1, {max_address}])")]
+    OutOfBounds { address: usize, max_address: usize },
+    #[error("invalid value box memory address:\n\t{0}")]
+    InvalidValueBoxMemoryAddress(#[from] ReadValueBoxMemoryAddressError),
+}
+
 // General methods
 impl Memory {
     pub fn with_data(data: HashMap<usize, ValueBox>, max_address: usize) -> Self {
@@ -32,27 +48,28 @@ impl Memory {
         Self { data, max_address }
     }
 
+    /// at_adress is at least 1 and at most max_len - 1
+    pub fn is_valid_memory_address(&self, at_address: &usize) -> bool {
+        at_address <= &self.max_address
+    }
+
     pub fn get(&self, address: &usize) -> Option<&ValueBox> {
         self.data.get(address)
     }
 
-    /// at_adress is at least 1 and at most max_len - 1
-    pub fn can_set(&self, at_address: &usize) -> bool {
-        at_address <= &self.max_address
+    pub fn get_with_vbma(&self, vbma: &ValueBoxMemoryAddress) -> Result<&ValueBox, GetMemoryError> {
+        let address = self.translate_vbma_to_mem_address(vbma)?;
+        self.get(&address)
+            .ok_or(GetMemoryError::NoValueAtAddress(address, *vbma))
     }
 
-    /// check if at_address is a valid memory address when at_address is not usize
-    pub fn could_set(&self, at_address: &i32) -> bool {
-        at_address >= &0 && (*at_address as usize) <= self.max_address
-    }
-
-    pub fn set(&mut self, address: &usize, value: Option<ValueBox>) {
-        if !self.can_set(address) {
+    pub fn set(&mut self, address: &usize, value: Option<ValueBox>) -> Result<(), SetMemoryError> {
+        if !self.is_valid_memory_address(address) {
             // address is bound by max_len
-            panic!(
-                "Memory address {address} out of bounds (accepted: [1, {}])",
-                self.max_address
-            );
+            return Err(SetMemoryError::OutOfBounds {
+                address: *address,
+                max_address: self.max_address,
+            });
         }
 
         match value {
@@ -63,29 +80,77 @@ impl Memory {
                 self.data.remove(address);
             }
         }
+        Ok(())
     }
+
+    pub fn set_with_vbma(
+        &mut self,
+        vbma: &ValueBoxMemoryAddress,
+        value: Option<ValueBox>,
+    ) -> Result<(), SetMemoryError> {
+        let address = self.translate_vbma_to_mem_address(vbma)?;
+        self.set(&address, value)
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ReadValueBoxMemoryAddressError {
+    #[error("Value {value_tested} in memory at {pointer_address} is negative, which is not a valid memory address")]
+    NegativePointerAddress {
+        value_tested: i32,
+        pointer_address: usize,
+    },
+    #[error(
+        "There is no value in memory at address {0} to be interpreted as a memory address itself (given by {1:?})"
+    )]
+    NoValueAtAddress(usize, ValueBoxMemoryAddress),
+    #[error("final address {final_address} given by {vbma:?} is out of bounds (accepted: [0, {max_address}])")]
+    OutOfBounds {
+        final_address: usize,
+        vbma: ValueBoxMemoryAddress,
+        max_address: usize,
+    },
 }
 
 // Specific methods
 impl Memory {
-    pub fn get_valid_address(
+    pub fn translate_vbma_to_mem_address(
         &self,
         value_box_memory_address: &ValueBoxMemoryAddress,
-    ) -> Result<usize, Box<dyn Error>> {
-        match value_box_memory_address {
-            ValueBoxMemoryAddress::Pointer(address) => Ok(*address),
+    ) -> Result<usize, ReadValueBoxMemoryAddressError> {
+        let final_address = match value_box_memory_address {
+            // VBMA is a direct memory address
+            ValueBoxMemoryAddress::Pointer(address) => *address,
+            // VBMA is a pointer to a memory address
             ValueBoxMemoryAddress::PointerAddress(pointer_address) => {
-                let address = self.get(pointer_address);
-                if let Some(ValueBox::Number(n)) = address {
-                    if !self.could_set(n) {
-                        return Err(format!("Value in memory at {pointer_address} is not a valid memory address ({n})").into());
+                match self.get(pointer_address) {
+                    Some(ValueBox::Number(address)) => {
+                        if *address < 0 {
+                            return Err(ReadValueBoxMemoryAddressError::NegativePointerAddress {
+                                value_tested: *address,
+                                pointer_address: *pointer_address,
+                            });
+                        }
+                        *address as usize
                     }
-                    Ok(*n as usize)
-                } else {
-                    Err(format!("There is no value in memory at address {pointer_address}").into())
+                    _ => {
+                        return Err(ReadValueBoxMemoryAddressError::NoValueAtAddress(
+                            *pointer_address,
+                            *value_box_memory_address,
+                        ))
+                    }
                 }
             }
+        };
+
+        if !self.is_valid_memory_address(&final_address) {
+            return Err(ReadValueBoxMemoryAddressError::OutOfBounds {
+                final_address,
+                vbma: *value_box_memory_address,
+                max_address: self.max_address,
+            });
         }
+        Ok(final_address)
     }
 }
 
@@ -107,15 +172,15 @@ mod memory_tests {
         let mut memory = Memory::default();
         memory.max_address = 10;
 
-        assert!(memory.can_set(&1));
-        assert!(memory.can_set(&0));
-        assert!(!memory.can_set(&11));
+        assert!(memory.is_valid_memory_address(&1));
+        assert!(memory.is_valid_memory_address(&0));
+        assert!(!memory.is_valid_memory_address(&11));
     }
 
     #[test]
     fn test_memory_set() {
         let mut memory = Memory::default();
-        memory.set(&1, Some(ValueBox::from(42)));
+        memory.set(&1, Some(ValueBox::from(42))).unwrap();
 
         assert_eq!(memory.get(&1), Some(&ValueBox::from(42)));
     }
@@ -123,8 +188,8 @@ mod memory_tests {
     #[test]
     fn test_memory_set_none() {
         let mut memory = Memory::default();
-        memory.set(&1, Some(ValueBox::from(42)));
-        memory.set(&1, None);
+        memory.set(&1, Some(ValueBox::from(42))).unwrap();
+        memory.set(&1, None).unwrap();
 
         assert_eq!(memory.get(&1), None);
     }
@@ -134,6 +199,6 @@ mod memory_tests {
     fn test_memory_set_out_of_bounds() {
         let mut memory = Memory::default();
         memory.max_address = 10;
-        memory.set(&11, Some(ValueBox::from(42)));
+        memory.set(&11, Some(ValueBox::from(42))).unwrap();
     }
 }

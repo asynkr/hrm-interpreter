@@ -19,6 +19,89 @@ pub struct Interpreter {
     next_input: usize,
 }
 
+// Initialization methods
+impl Interpreter {
+    pub fn new(memory: Memory) -> Self {
+        Self {
+            memory,
+            head: None,
+            next_input: 0,
+        }
+    }
+}
+
+// ==================== Script execution ====================
+
+#[derive(Debug, thiserror::Error)]
+pub enum ExecuteScriptError {
+    #[error("INTERPRETER ERROR | cannot jump: no block with label {0} found")]
+    InvalidJumpError(String),
+    #[error("INTERPRETER ERROR | error executing an instruction:\n\t{0}")]
+    ExecuteInstructionError(#[from] ExecuteInstructionError),
+}
+
+impl Interpreter {
+    pub fn execute(
+        &mut self,
+        script: &ScriptObject,
+        inputs: &[ValueBox],
+    ) -> Result<Vec<ValueBox>, ExecuteScriptError> {
+        let mut output: Vec<ValueBox> = vec![];
+        let mut current_block: &Block = script.get_block_by_index(0).unwrap();
+
+        loop {
+            match self.execute_block(current_block, inputs, &mut output)? {
+                BlockResult::JumpBlock(label) => match script.get_block_by_label(&label) {
+                    Some(block) => current_block = block,
+                    None => return Err(ExecuteScriptError::InvalidJumpError(label)),
+                },
+                BlockResult::NextBlock => match script.get_next(current_block) {
+                    Some(block) => current_block = block,
+                    None => break,
+                },
+                BlockResult::Terminate => break,
+            }
+        }
+
+        Ok(output)
+    }
+}
+
+// ==================== Block execution ====================
+
+/// All the possible things that can happen after executing a block
+enum BlockResult {
+    /// A jump instruction was executed inside the block
+    JumpBlock(String),
+    /// The block reached its end, go to the next one
+    NextBlock,
+    /// The program has terminated.
+    Terminate,
+}
+
+impl Interpreter {
+    fn execute_block(
+        &mut self,
+        block: &Block,
+        inputs: &[ValueBox],
+        outputs: &mut Vec<ValueBox>,
+    ) -> Result<BlockResult, ExecuteInstructionError> {
+        for instruction in block.instructions.iter() {
+            match self.execute_instruction(instruction, inputs, outputs)? {
+                InstructionResult::JumpBlock(label) => return Ok(BlockResult::JumpBlock(label)),
+                InstructionResult::NextInstruction => {}
+                InstructionResult::Terminate => return Ok(BlockResult::Terminate),
+            }
+        }
+
+        // All instructions executed
+        // Go to next chronological block
+        Ok(BlockResult::NextBlock)
+    }
+}
+
+// ==================== Instruction execution ====================
+
 #[derive(Debug, PartialEq)]
 /// All the possible things that can happen after executing an instruction
 enum InstructionResult {
@@ -31,75 +114,64 @@ enum InstructionResult {
     Terminate,
 }
 
-/// All the possible things that can happen after executing a block
-enum BlockResult {
-    /// A jump instruction was executed inside the block
-    JumpBlock(String),
-    /// The block reached its end, go to the next one
-    NextBlock,
-    /// The program has terminated.
-    Terminate,
+#[derive(Debug, thiserror::Error)]
+pub enum ExecuteInstructionError {
+    #[error("cannot output: head empty")]
+    OutputNone,
+
+    #[error("cannot copy from:\n\t{0}")]
+    CopyFromInvalidAddress(#[source] memory::GetMemoryError),
+    #[error("cannot copy to:\n\t{0}")]
+    CopyToInvalidAddress(#[source] memory::SetMemoryError),
+    #[error("cannot copy to: head empty")]
+    CopyToHeadNone,
+
+    #[error("cannot read memory value from VBMA:\n\t{0}")]
+    AddInvalidAddress(#[source] memory::GetMemoryError),
+    #[error("cannot add: empty head")]
+    AddHeadNone,
+    #[error("cannot add characters (head: {head} and mem: {mem} at address {address})")]
+    AddCharacters {
+        head: char,
+        mem: char,
+        address: usize,
+    },
+    #[error("cannot add characters and numbers together (head: {head:?} and mem: {mem:?} at address {address})")]
+    AddCharacterAndNumber {
+        head: ValueBox,
+        mem: ValueBox,
+        address: usize,
+    },
+
+    #[error("cannot read memory value from VBMA:\n\t{0}")]
+    SubInvalidAddress(#[source] memory::GetMemoryError),
+    #[error("cannot subtract: empty head")]
+    SubHeadNone,
+    #[error("cannot subtract characters and numbers together (head: {head:?} and mem: {mem:?} at address {address})")]
+    SubCharacterAndNumber {
+        head: ValueBox,
+        mem: ValueBox,
+        address: usize,
+    },
+
+    #[error("cannot test IfZero if head ({0:?}) is not a valid number")]
+    JumpIfZeroInvalidHead(Option<ValueBox>),
+    #[error("cannot test IfNegative if head ({0:?}) is not a valid number")]
+    JumpIfNegativeInvalidHead(Option<ValueBox>),
+
+    #[error("cannot bump memory value from VBMA:\n\t{0}")]
+    BumpInvalidAddress(#[source] memory::GetMemoryError),
+    #[error("cannot bump a character")]
+    BumpCharacter,
 }
 
-// Initialization methods
 impl Interpreter {
-    pub fn new(memory: Memory) -> Self {
-        Self {
-            memory,
-            head: None,
-            next_input: 0,
-        }
-    }
-}
-
-// Execution methods
-impl Interpreter {
-    pub fn execute(&mut self, script: &ScriptObject, inputs: &[ValueBox]) -> Vec<ValueBox> {
-        let mut output: Vec<ValueBox> = vec![];
-        let mut current_block: &Block = script.get_block_by_index(0).unwrap();
-
-        loop {
-            match self.execute_block(current_block, inputs, &mut output) {
-                BlockResult::JumpBlock(label) => match script.get_block_by_label(&label) {
-                    Some(block) => current_block = block,
-                    None => panic!("Cannot jump: no block with label {} found", label),
-                },
-                BlockResult::NextBlock => match script.get_next(current_block) {
-                    Some(block) => current_block = block,
-                    None => break,
-                },
-                BlockResult::Terminate => break,
-            }
-        }
-
-        output
-    }
-
-    fn execute_block(
-        &mut self,
-        block: &Block,
-        inputs: &[ValueBox],
-        outputs: &mut Vec<ValueBox>,
-    ) -> BlockResult {
-        for instruction in block.instructions.iter() {
-            match self.execute_instruction(instruction, inputs, outputs) {
-                InstructionResult::JumpBlock(label) => return BlockResult::JumpBlock(label),
-                InstructionResult::NextInstruction => {}
-                InstructionResult::Terminate => return BlockResult::Terminate,
-            }
-        }
-
-        // All instructions executed
-        // Go to next chronological block
-        BlockResult::NextBlock
-    }
-
     fn execute_instruction(
         &mut self,
         instruction: &Instruction,
         inputs: &[ValueBox],
         outputs: &mut Vec<ValueBox>,
-    ) -> InstructionResult {
+    ) -> Result<InstructionResult, ExecuteInstructionError> {
         match instruction {
             Instruction::In => {
                 match inputs.get(self.next_input) {
@@ -109,51 +181,73 @@ impl Interpreter {
                     }
                     // No more inputs => terminate program
                     None => {
-                        return InstructionResult::Terminate;
+                        return Ok(InstructionResult::Terminate);
                     }
                 }
             }
             Instruction::Out => match &self.head {
-                Some(value) => {
-                    outputs.push(*value);
-                }
-                None => panic!("Cannot output: None in head"),
+                Some(value) => outputs.push(*value),
+                None => return Err(ExecuteInstructionError::OutputNone),
             },
             Instruction::CopyFrom(vbma) => {
-                let address = self.memory.get_valid_address(vbma).unwrap();
-                if let Some(value) = self.memory.get(&address) {
-                    self.head = Some(*value);
-                } else {
-                    panic!("No value in memory at address {}", address);
-                }
+                let value = self
+                    .memory
+                    .get_with_vbma(vbma)
+                    .map_err(ExecuteInstructionError::CopyFromInvalidAddress)?;
+                self.head = Some(*value);
             }
             Instruction::CopyTo(vbma) => {
                 if self.head.is_none() {
-                    panic!("Cannot copy to memory: None in head");
+                    return Err(ExecuteInstructionError::CopyToHeadNone);
                 }
 
-                let address = self.memory.get_valid_address(vbma).unwrap();
-                self.memory.set(&address, self.head);
+                self.memory
+                    .set_with_vbma(vbma, self.head)
+                    .map_err(ExecuteInstructionError::CopyToInvalidAddress)?;
             }
 
             Instruction::Add(vbma) => {
-                let (vb_head, vm_mem) = self.get_head_and_mem_value(vbma);
+                let mem_value = self
+                    .memory
+                    .get_with_vbma(vbma)
+                    .map_err(ExecuteInstructionError::AddInvalidAddress)?;
+                let head_value = &self.head.ok_or(ExecuteInstructionError::AddHeadNone)?;
 
-                match (vb_head, vm_mem) {
-                    (ValueBox::Number(h), ValueBox::Number(m)) => self.head = Some(ValueBox::from(h + m)),
-                    (ValueBox::Character(_), ValueBox::Character(_)) => panic!("Cannot add characters (head: {:?} and mem: {:?} at adress {:?})", vb_head, vm_mem, self.memory.get_valid_address(vbma)),
-                    _ => panic!("Cannot add characters and numbers together (head: {:?} and mem: {:?} at adress {:?})", vb_head, vm_mem, self.memory.get_valid_address(vbma)),
+                match (head_value, mem_value) {
+                    (ValueBox::Number(h), ValueBox::Number(m)) => {
+                        self.head = Some(ValueBox::from(h + m))
+                    }
+                    (ValueBox::Character(char_head), ValueBox::Character(char_mem)) => {
+                        return Err(ExecuteInstructionError::AddCharacters {
+                            head: *char_head,
+                            mem: *char_mem,
+                            address: self.memory.translate_vbma_to_mem_address(vbma).unwrap(),
+                        });
+                    }
+                    _ => {
+                        return Err(ExecuteInstructionError::AddCharacterAndNumber {
+                            head: *head_value,
+                            mem: *mem_value,
+                            address: self.memory.translate_vbma_to_mem_address(vbma).unwrap(),
+                        });
+                    }
                 }
             }
             Instruction::Sub(vbma) => {
-                let (vb_head, vm_mem) = self.get_head_and_mem_value(vbma);
+                let mem_value = self
+                    .memory
+                    .get_with_vbma(vbma)
+                    .map_err(ExecuteInstructionError::SubInvalidAddress)?;
+                let head_value = &self.head.ok_or(ExecuteInstructionError::SubHeadNone)?;
 
-                match (vb_head, vm_mem) {
-                    (ValueBox::Number(h), ValueBox::Number(m)) => self.head = Some(ValueBox::from(h - m)),
+                match (head_value, mem_value) {
+                    (ValueBox::Number(h), ValueBox::Number(m)) => {
+                        self.head = Some(ValueBox::from(h - m))
+                    }
                     (ValueBox::Character(h), ValueBox::Character(m)) => {
                         // Special case: in HRM, we CAN subtract characters together
                         // The result is the distance between the two characters in the alphabet (an integer)
-                        let get_alphabetic_index = |c: char| -> i8 {
+                        let get_alphabetic_index = |c: &char| -> i8 {
                             let c = c.to_ascii_uppercase();
                             c as i8 - 'A' as i8
                         };
@@ -162,72 +256,71 @@ impl Interpreter {
                         let result = (h - m) as i32;
                         self.head = Some(ValueBox::from(result));
                     }
-                    _ => panic!("Cannot subtract characters and numbers together (head: {:?} and mem: {:?} at adress {:?})", vb_head, vm_mem, self.memory.get_valid_address(vbma)),
+                    _ => {
+                        return Err(ExecuteInstructionError::SubCharacterAndNumber {
+                            head: *head_value,
+                            mem: *mem_value,
+                            address: self.memory.translate_vbma_to_mem_address(vbma).unwrap(),
+                        });
+                    }
                 }
             }
 
-            Instruction::BumpUp(vbma) => self.bump_mem_value(vbma, true),
-            Instruction::BumpDown(vbma) => self.bump_mem_value(vbma, false),
+            Instruction::BumpUp(vbma) => self.bump_mem_value(vbma, true)?,
+            Instruction::BumpDown(vbma) => self.bump_mem_value(vbma, false)?,
 
-            Instruction::Jump(block_key) => return InstructionResult::JumpBlock(block_key.clone()),
+            Instruction::Jump(block_key) => {
+                return Ok(InstructionResult::JumpBlock(block_key.clone()))
+            }
             Instruction::JumpIfZero(block_key) => match self.head {
+                Some(ValueBox::Character(_)) => {} // Characters are never equal to 0
                 Some(ValueBox::Number(n)) => {
                     if n == 0 {
-                        return InstructionResult::JumpBlock(block_key.clone());
+                        return Ok(InstructionResult::JumpBlock(block_key.clone()));
                     }
                 }
-                Some(ValueBox::Character(_)) => {} // Characters are never equal to 0
-                _ => panic!(
-                    "Cannot test IfZero if head ({:?}) is not a valid number",
-                    self.head
-                ),
+                _ => {
+                    return Err(ExecuteInstructionError::JumpIfZeroInvalidHead(self.head));
+                }
             },
             Instruction::JumpIfNegative(block_key) => match self.head {
+                Some(ValueBox::Character(_)) => {} // Characters are never negative
                 Some(ValueBox::Number(n)) => {
                     if n < 0 {
-                        return InstructionResult::JumpBlock(block_key.clone());
+                        return Ok(InstructionResult::JumpBlock(block_key.clone()));
                     }
                 }
-                Some(ValueBox::Character(_)) => {} // Characters are never negative
-                _ => panic!(
-                    "Cannot test IfNegative if head ({:?}) is not a valid number",
-                    self.head
-                ),
+                _ => {
+                    return Err(ExecuteInstructionError::JumpIfNegativeInvalidHead(
+                        self.head,
+                    ));
+                }
             },
         };
-        InstructionResult::NextInstruction
+        Ok(InstructionResult::NextInstruction)
     }
 
-    fn get_head_and_mem_value(&mut self, vbma: &ValueBoxMemoryAddress) -> (ValueBox, ValueBox) {
-        let address = self.memory.get_valid_address(vbma).unwrap();
-        let mem_value = self.memory.get(&address);
-
-        match (self.head, mem_value) {
-            (Some(vb_head), Some(vb_mem)) => (vb_head, *vb_mem),
-            _ => panic!(
-                "Cannot retrieve head or memory (head: {:?} and mem: {:?} at adress {:?})",
-                self.head,
-                mem_value,
-                self.memory.get_valid_address(vbma)
-            ),
-        }
-    }
-
-    fn bump_mem_value(&mut self, vbma: &ValueBoxMemoryAddress, up: bool) {
-        let address = self.memory.get_valid_address(vbma).unwrap();
-        let mem_value = self.memory.get(&address);
+    fn bump_mem_value(
+        &mut self,
+        vbma: &ValueBoxMemoryAddress,
+        up: bool,
+    ) -> Result<(), ExecuteInstructionError> {
+        let mem_value = self
+            .memory
+            .get_with_vbma(vbma)
+            .map_err(ExecuteInstructionError::BumpInvalidAddress)?;
 
         let new_value = match (mem_value, up) {
-            (Some(ValueBox::Number(m)), true) => *m + 1,
-            (Some(ValueBox::Number(m)), false) => *m - 1,
-            _ => panic!(
-                "Cannot bump up, invalid value in memory: {:?} at address: {:?} (vbma: {:?})",
-                mem_value, address, vbma
-            ),
+            (ValueBox::Number(m), true) => m + 1,
+            (ValueBox::Number(m), false) => m - 1,
+            (ValueBox::Character(_), _) => return Err(ExecuteInstructionError::BumpCharacter),
         };
 
-        self.memory.set(&address, Some(ValueBox::from(new_value)));
+        self.memory
+            .set_with_vbma(vbma, Some(ValueBox::from(new_value)))
+            .unwrap(); // Should never fail because we just read it
         self.head = Some(ValueBox::from(new_value));
+        Ok(())
     }
 }
 
@@ -247,11 +340,11 @@ mod test_instructions_execution {
         };
 
         let result = interpreter.execute_instruction(&Instruction::In, &[], &mut vec![]);
-        assert_eq!(result, InstructionResult::Terminate);
+        assert_eq!(result.unwrap(), InstructionResult::Terminate);
 
         let result =
             interpreter.execute_instruction(&Instruction::In, &[ValueBox::from(10)], &mut vec![]);
-        assert_eq!(result, InstructionResult::NextInstruction);
+        assert_eq!(result.unwrap(), InstructionResult::NextInstruction);
         assert_eq!(interpreter.head, Some(ValueBox::from(10)));
     }
 
@@ -265,7 +358,7 @@ mod test_instructions_execution {
 
         let mut outputs = vec![];
         let result = interpreter.execute_instruction(&Instruction::Out, &[], &mut outputs);
-        assert_eq!(result, InstructionResult::NextInstruction);
+        assert_eq!(result.unwrap(), InstructionResult::NextInstruction);
         assert_eq!(outputs, vec![ValueBox::from(42)]);
     }
 
@@ -282,7 +375,7 @@ mod test_instructions_execution {
             &[],
             &mut vec![],
         );
-        assert_eq!(result, InstructionResult::NextInstruction);
+        assert_eq!(result.unwrap(), InstructionResult::NextInstruction);
         assert_eq!(interpreter.head, Some(ValueBox::from(42)));
     }
 
@@ -299,7 +392,7 @@ mod test_instructions_execution {
             &[],
             &mut vec![],
         );
-        assert_eq!(result, InstructionResult::NextInstruction);
+        assert_eq!(result.unwrap(), InstructionResult::NextInstruction);
         assert_eq!(interpreter.memory.get(&0), Some(&ValueBox::from(10)));
     }
 
@@ -316,7 +409,7 @@ mod test_instructions_execution {
             &[],
             &mut vec![],
         );
-        assert_eq!(result, InstructionResult::NextInstruction);
+        assert_eq!(result.unwrap(), InstructionResult::NextInstruction);
         assert_eq!(interpreter.head, Some(ValueBox::from(52)));
         assert_eq!(interpreter.memory.get(&0), Some(&ValueBox::from(42)));
     }
@@ -334,7 +427,7 @@ mod test_instructions_execution {
             &[],
             &mut vec![],
         );
-        assert_eq!(result, InstructionResult::NextInstruction);
+        assert_eq!(result.unwrap(), InstructionResult::NextInstruction);
         assert_eq!(interpreter.head, Some(ValueBox::from(-32)));
         assert_eq!(interpreter.memory.get(&0), Some(&ValueBox::from(42)));
     }
@@ -352,7 +445,7 @@ mod test_instructions_execution {
             &[],
             &mut vec![],
         );
-        assert_eq!(result, InstructionResult::NextInstruction);
+        assert_eq!(result.unwrap(), InstructionResult::NextInstruction);
         assert_eq!(interpreter.head, Some(ValueBox::from(-4)));
         assert_eq!(interpreter.memory.get(&0), Some(&ValueBox::from('E')));
     }
@@ -370,7 +463,7 @@ mod test_instructions_execution {
             &[],
             &mut vec![],
         );
-        assert_eq!(result, InstructionResult::NextInstruction);
+        assert_eq!(result.unwrap(), InstructionResult::NextInstruction);
         assert_eq!(interpreter.head, Some(ValueBox::from(43)));
         assert_eq!(interpreter.memory.get(&0), Some(&ValueBox::from(43)));
     }
@@ -388,7 +481,7 @@ mod test_instructions_execution {
             &[],
             &mut vec![],
         );
-        assert_eq!(result, InstructionResult::NextInstruction);
+        assert_eq!(result.unwrap(), InstructionResult::NextInstruction);
         assert_eq!(interpreter.head, Some(ValueBox::from(41)));
         assert_eq!(interpreter.memory.get(&0), Some(&ValueBox::from(41)));
     }
@@ -406,7 +499,10 @@ mod test_instructions_execution {
             &[],
             &mut vec![],
         );
-        assert_eq!(result, InstructionResult::JumpBlock("label".to_string()));
+        assert_eq!(
+            result.unwrap(),
+            InstructionResult::JumpBlock("label".to_string())
+        );
     }
 
     #[test]
@@ -422,7 +518,10 @@ mod test_instructions_execution {
             &[],
             &mut vec![],
         );
-        assert_eq!(result, InstructionResult::JumpBlock("label".to_string()));
+        assert_eq!(
+            result.unwrap(),
+            InstructionResult::JumpBlock("label".to_string())
+        );
     }
 
     #[test]
@@ -438,7 +537,7 @@ mod test_instructions_execution {
             &[],
             &mut vec![],
         );
-        assert_eq!(result, InstructionResult::NextInstruction);
+        assert_eq!(result.unwrap(), InstructionResult::NextInstruction);
     }
 
     #[test]
@@ -454,7 +553,10 @@ mod test_instructions_execution {
             &[],
             &mut vec![],
         );
-        assert_eq!(result, InstructionResult::JumpBlock("label".to_string()));
+        assert_eq!(
+            result.unwrap(),
+            InstructionResult::JumpBlock("label".to_string())
+        );
     }
 
     #[test]
@@ -470,6 +572,6 @@ mod test_instructions_execution {
             &[],
             &mut vec![],
         );
-        assert_eq!(result, InstructionResult::NextInstruction);
+        assert_eq!(result.unwrap(), InstructionResult::NextInstruction);
     }
 }

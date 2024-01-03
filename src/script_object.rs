@@ -1,4 +1,4 @@
-use std::{collections::HashMap, error::Error, str::FromStr};
+use std::{collections::HashMap, str::FromStr};
 
 pub mod instruction;
 pub mod value_box;
@@ -54,12 +54,21 @@ impl ScriptObject {
         let curr_index = current_block.index;
         self.get_block_by_index(curr_index + 1)
     }
+}
 
-    pub fn validate_or_panic(self) -> Self {
+#[derive(Debug, thiserror::Error)]
+pub enum ScriptObjectValidationError {
+    #[error("Some jumps have invalid anchors")]
+    InvalidJumps,
+}
+
+impl ScriptObject {
+    pub fn validate(&self) -> Result<(), ScriptObjectValidationError> {
         if !self.all_jumps_have_valid_anchors() {
-            panic!("Some jumps have invalid anchors");
+            Err(ScriptObjectValidationError::InvalidJumps)
+        } else {
+            Ok(())
         }
-        self
     }
 
     fn all_jumps_have_valid_anchors(&self) -> bool {
@@ -87,8 +96,21 @@ impl ScriptObject {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum ParseScriptObjectError {
+    #[error(
+        "PARSER ERROR | error parsing the script on line {line}: '{instruction}' | Detailed error: {error}"
+    )]
+    InvalidInstruction {
+        line: usize,
+        instruction: String,
+        #[source]
+        error: instruction::ParseInstructionError,
+    },
+}
+
 impl FromStr for ScriptObject {
-    type Err = Box<dyn Error>;
+    type Err = ParseScriptObjectError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut blocks: Vec<Block> = Vec::new();
@@ -113,10 +135,12 @@ impl FromStr for ScriptObject {
                 break;
             }
 
-            if line.contains(':') {
+            let line_split_colon = line.split(':').collect::<Vec<&str>>();
+            if line_split_colon.len() > 1 {
+                // <=> line contains a colon
                 // Block definition
                 let new_block = Block {
-                    name: line.split(':').collect::<Vec<&str>>()[0].to_string(),
+                    name: line_split_colon[0].to_string(),
                     index: blocks.len(),
                     instructions: Vec::new(),
                 };
@@ -125,20 +149,17 @@ impl FromStr for ScriptObject {
             }
 
             // Line is an instruction
-            match Instruction::from_str(line) {
-                Ok(instruction) => {
-                    blocks.last_mut().unwrap().instructions.push(instruction);
-                }
-                Err(err) => {
-                    return Err(format!(
-                        "Error parsing script on line {}: `{}`: {}",
-                        i + 1,
-                        line,
-                        err
-                    )
-                    .into());
-                }
-            }
+            blocks
+                .last_mut()
+                .unwrap()
+                .instructions
+                .push(Instruction::from_str(line).map_err(|err| {
+                    Self::Err::InvalidInstruction {
+                        line: i + 1,
+                        instruction: line.to_string(),
+                        error: err,
+                    }
+                })?);
         }
 
         Ok(Self::new(blocks))
