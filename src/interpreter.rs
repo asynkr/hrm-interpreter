@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use crate::script_object::{
     instruction::Instruction,
     value_box::{ValueBox, ValueBoxMemoryAddress},
@@ -19,7 +21,43 @@ pub struct Interpreter {
     next_input: usize,
 }
 
-// Initialization methods
+/// Holds the state of the interpreter at a given moment,
+/// for debugging purposes.
+pub struct InterpreterStateInfo {
+    inputs_left: Vec<String>,
+    outputs: Vec<String>,
+    memory: Vec<(usize, String)>,
+}
+
+impl Debug for InterpreterStateInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let inputs_left = self
+            .inputs_left
+            .iter()
+            .map(|vb| vb.to_string())
+            .collect::<Vec<String>>()
+            .join(", ");
+        let outputs = self
+            .outputs
+            .iter()
+            .map(|vb| vb.to_string())
+            .collect::<Vec<String>>()
+            .join(", ");
+        let memory = self
+            .memory
+            .iter()
+            .map(|(address, vb)| format!("{}: {}", address, vb))
+            .collect::<Vec<String>>()
+            .join("\n");
+
+        write!(
+            f,
+            "Inputs left: {}\nOutputs: {}\nMemory:\n{}",
+            inputs_left, outputs, memory
+        )
+    }
+}
+
 impl Interpreter {
     pub fn new(memory: Memory) -> Self {
         Self {
@@ -28,19 +66,49 @@ impl Interpreter {
             next_input: 0,
         }
     }
+
+    fn build_state(&self, inputs: &[ValueBox], outputs: &[ValueBox]) -> InterpreterStateInfo {
+        let inputs_left = inputs[self.next_input..]
+            .iter()
+            .map(|vb| vb.to_string())
+            .collect::<Vec<String>>();
+        let outputs = outputs
+            .iter()
+            .map(|vb| vb.to_string())
+            .collect::<Vec<String>>();
+
+        let memory_indices = 0..self.memory.get_max_address() + 1;
+        let memory = memory_indices
+            .map(|i| {
+                if let Some(vb) = self.memory.get(&i) {
+                    (i, vb.to_string())
+                } else {
+                    (i, "None".to_string())
+                }
+            })
+            .collect::<Vec<(usize, String)>>();
+
+        InterpreterStateInfo {
+            inputs_left,
+            outputs,
+            memory,
+        }
+    }
 }
 
 // ==================== Script execution ====================
 
 #[derive(Debug, thiserror::Error)]
+/// Wrapper for all the possible errors that can occur when executing a script.
 pub enum ExecuteScriptError {
-    #[error("INTERPRETER ERROR | cannot jump: no block with label {0} found")]
-    InvalidJumpError(String),
-    #[error("INTERPRETER ERROR | error executing an instruction:\n\t{0}")]
-    ExecuteInstructionError(#[from] ExecuteInstructionError),
+    #[error("INTERPRETER ERROR | cannot jump: no block with label {1} found\n-- STATE --\n{0:?}")]
+    InvalidJumpError(InterpreterStateInfo, String),
+    #[error("INTERPRETER ERROR | error executing an instruction:\n\t{1}\n-- STATE --\n{0:?}")]
+    ExecuteInstructionError(InterpreterStateInfo, #[source] ExecuteInstructionError),
 }
 
 impl Interpreter {
+    /// Execute a given script with given outputs, starting at first block.
     pub fn execute(
         &mut self,
         script: &ScriptObject,
@@ -50,10 +118,22 @@ impl Interpreter {
         let mut current_block: &Block = script.get_block_by_index(0).unwrap();
 
         loop {
-            match self.execute_block(current_block, inputs, &mut output)? {
+            match self
+                .execute_block(current_block, inputs, &mut output)
+                .map_err(|e| {
+                    ExecuteScriptError::ExecuteInstructionError(
+                        self.build_state(inputs, &output),
+                        e,
+                    )
+                })? {
                 BlockResult::JumpBlock(label) => match script.get_block_by_label(&label) {
                     Some(block) => current_block = block,
-                    None => return Err(ExecuteScriptError::InvalidJumpError(label)),
+                    None => {
+                        return Err(ExecuteScriptError::InvalidJumpError(
+                            self.build_state(inputs, &output),
+                            label,
+                        ))
+                    }
                 },
                 BlockResult::NextBlock => match script.get_next(current_block) {
                     Some(block) => current_block = block,
@@ -80,6 +160,8 @@ enum BlockResult {
 }
 
 impl Interpreter {
+    /// Execute the instructions of a given block one by one,
+    /// mutating the output along the way.
     fn execute_block(
         &mut self,
         block: &Block,
@@ -115,6 +197,9 @@ enum InstructionResult {
 }
 
 #[derive(Debug, thiserror::Error)]
+/// All errors that can occur when executing an instruction
+/// Errors are voluntarily redundant from one instruction type to another,
+/// to make it easier to understand what went wrong.
 pub enum ExecuteInstructionError {
     #[error("cannot output: head empty")]
     OutputNone,
@@ -166,6 +251,8 @@ pub enum ExecuteInstructionError {
 }
 
 impl Interpreter {
+    /// Execute 1 instruction
+    /// using one big match to handle all the possible instructions
     fn execute_instruction(
         &mut self,
         instruction: &Instruction,

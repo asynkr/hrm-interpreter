@@ -43,6 +43,7 @@ pub enum Instruction {
 }
 
 #[derive(Debug, thiserror::Error)]
+/// Error that can occur when parsing an instruction.
 pub enum ParseInstructionError {
     #[error("too much parts in the instruction line, expected 2 at most, got {}", .0.len())]
     TooMuchParts(Vec<String>),

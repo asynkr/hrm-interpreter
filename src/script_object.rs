@@ -39,10 +39,12 @@ impl ScriptObject {
         Self { blocks, blocks_map }
     }
 
+    /// Get the block at the given index.
     pub fn get_block_by_index(&self, current_block: usize) -> Option<&Block> {
         self.blocks.get(current_block)
     }
 
+    /// Get the block with the given label.
     pub fn get_block_by_label(&self, label: &str) -> Option<&Block> {
         match self.blocks_map.get(label) {
             Some(index) => Some(&self.blocks[*index]),
@@ -50,6 +52,7 @@ impl ScriptObject {
         }
     }
 
+    /// Get the next block after the given one (in the order of the script)
     pub fn get_next(&self, current_block: &Block) -> Option<&Block> {
         let curr_index = current_block.index;
         self.get_block_by_index(curr_index + 1)
@@ -57,12 +60,15 @@ impl ScriptObject {
 }
 
 #[derive(Debug, thiserror::Error)]
+/// After parsing the script, we can validate it.
+/// This error is returned if the script is invalid.
 pub enum ScriptObjectValidationError {
     #[error("Some jumps have invalid anchors")]
     InvalidJumps,
 }
 
 impl ScriptObject {
+    /// After parsing the script, we can validate it.
     pub fn validate(&self) -> Result<(), ScriptObjectValidationError> {
         if !self.all_jumps_have_valid_anchors() {
             Err(ScriptObjectValidationError::InvalidJumps)
@@ -71,6 +77,7 @@ impl ScriptObject {
         }
     }
 
+    /// Check if all jumps points to existing blocks.
     fn all_jumps_have_valid_anchors(&self) -> bool {
         let instructions = self
             .blocks
@@ -97,6 +104,7 @@ impl ScriptObject {
 }
 
 #[derive(Debug, thiserror::Error)]
+/// Error that can occur when parsing the script.
 pub enum ParseScriptObjectError {
     #[error(
         "PARSER ERROR | error parsing the script on line {line}: '{instruction}' | Detailed error: {error}"

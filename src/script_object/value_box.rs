@@ -25,6 +25,7 @@ pub enum ValueBoxMemoryAddress {
 }
 
 #[derive(Debug, thiserror::Error)]
+/// Error that can occur when parsing a ValueBox.
 pub enum ParseValueBoxError {
     #[error("{0} is not a number nor a single character")]
     TooManyCharacters(String),
@@ -68,6 +69,7 @@ impl ToString for ValueBox {
 }
 
 #[derive(Debug, thiserror::Error)]
+/// Error that can occur when parsing a "value box memory address".
 pub enum ParseValueBoxMemoryAddressError {
     #[error("error parsing '{0}' as a pointer (should be a positive integer):\n\t{1}")]
     InvalidPointer(String, #[source] std::num::ParseIntError),

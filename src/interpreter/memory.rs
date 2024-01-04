@@ -18,23 +18,6 @@ impl Default for Memory {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum GetMemoryError {
-    #[error("no value at address {0} given by {1:?}")]
-    NoValueAtAddress(usize, ValueBoxMemoryAddress),
-    #[error("invalid value box memory address:\n\t{0}")]
-    InvalidValueBoxMemoryAddress(#[from] ReadValueBoxMemoryAddressError),
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum SetMemoryError {
-    #[error("Memory address {address} out of bounds (accepted: [1, {max_address}])")]
-    OutOfBounds { address: usize, max_address: usize },
-    #[error("invalid value box memory address:\n\t{0}")]
-    InvalidValueBoxMemoryAddress(#[from] ReadValueBoxMemoryAddressError),
-}
-
-// General methods
 impl Memory {
     pub fn with_data(data: HashMap<usize, ValueBox>, max_address: usize) -> Self {
         #[cfg(debug_assertions)]
@@ -48,21 +31,51 @@ impl Memory {
         Self { data, max_address }
     }
 
-    /// at_adress is at least 1 and at most max_len - 1
+    pub fn get_max_address(&self) -> usize {
+        self.max_address
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+/// Error that can occur when reading a value and assuming it's not None.
+pub enum GetMemoryError {
+    #[error("no value at address {0} given by {1:?}")]
+    NoValueAtAddress(usize, ValueBoxMemoryAddress),
+    #[error("invalid value box memory address:\n\t{0}")]
+    InvalidValueBoxMemoryAddress(#[from] ReadValueBoxMemoryAddressError),
+}
+
+#[derive(Debug, thiserror::Error)]
+/// Error that can occur when setting a value.
+pub enum SetMemoryError {
+    #[error("Memory address {address} out of bounds (accepted: [1, {max_address}])")]
+    OutOfBounds { address: usize, max_address: usize },
+    #[error("invalid value box memory address:\n\t{0}")]
+    InvalidValueBoxMemoryAddress(#[from] ReadValueBoxMemoryAddressError),
+}
+
+// General methods
+impl Memory {
+    /// at_adress is at most max_len - 1
     pub fn is_valid_memory_address(&self, at_address: &usize) -> bool {
         at_address <= &self.max_address
     }
 
+    /// Get the value at the given address.
     pub fn get(&self, address: &usize) -> Option<&ValueBox> {
         self.data.get(address)
     }
 
+    /// Get the value at the given "value box memory address",
+    /// or return an error if there is no value at this address,
+    /// or if the address is invalid.
     pub fn get_with_vbma(&self, vbma: &ValueBoxMemoryAddress) -> Result<&ValueBox, GetMemoryError> {
         let address = self.translate_vbma_to_mem_address(vbma)?;
         self.get(&address)
             .ok_or(GetMemoryError::NoValueAtAddress(address, *vbma))
     }
 
+    /// Set the value at the given address.
     pub fn set(&mut self, address: &usize, value: Option<ValueBox>) -> Result<(), SetMemoryError> {
         if !self.is_valid_memory_address(address) {
             // address is bound by max_len
@@ -83,6 +96,7 @@ impl Memory {
         Ok(())
     }
 
+    /// Set the value at the given "value box memory address"
     pub fn set_with_vbma(
         &mut self,
         vbma: &ValueBoxMemoryAddress,
@@ -94,6 +108,7 @@ impl Memory {
 }
 
 #[derive(Debug, thiserror::Error)]
+/// Error that can occur when decoding a "value box memory address".
 pub enum ReadValueBoxMemoryAddressError {
     #[error("Value {value_tested} in memory at {pointer_address} is negative, which is not a valid memory address")]
     NegativePointerAddress {
@@ -114,6 +129,9 @@ pub enum ReadValueBoxMemoryAddressError {
 
 // Specific methods
 impl Memory {
+    /// Translate a "value box memory address" to a memory address.
+    /// It can be a direct memory address, or a pointer to a memory address.
+    /// In both cases, the validity of the memory address is checked.
     pub fn translate_vbma_to_mem_address(
         &self,
         value_box_memory_address: &ValueBoxMemoryAddress,

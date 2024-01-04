@@ -30,14 +30,12 @@ fn main() {
     match interpreter.execute(&script_object, &args.input_values) {
         Ok(outputs) => {
             // Print the outputs to stdout
-            print!(
-                "{}",
-                outputs
-                    .iter()
-                    .map(|value| value.to_string())
-                    .collect::<Vec<String>>()
-                    .join(" ")
-            );
+            let out_str = outputs
+                .iter()
+                .map(|value| value.to_string())
+                .collect::<Vec<String>>()
+                .join(" ");
+            print!("{}", out_str);
         }
         Err(e) => {
             eprintln!("{}", e);
