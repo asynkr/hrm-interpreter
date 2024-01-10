@@ -283,13 +283,14 @@ impl Interpreter {
                     .map_err(ExecuteInstructionError::CopyFromInvalidAddress)?;
                 self.head = Some(*value);
             }
+            Instruction::CopyTo(_) if self.head.is_none() => {
+                return Err(ExecuteInstructionError::CopyToHeadNone);
+            }
             Instruction::CopyTo(vbma) => {
-                if self.head.is_none() {
-                    return Err(ExecuteInstructionError::CopyToHeadNone);
-                }
+                let head_value = self.head.ok_or(ExecuteInstructionError::CopyToHeadNone)?;
 
                 self.memory
-                    .set_with_vbma(vbma, self.head)
+                    .set_with_vbma(vbma, Some(head_value))
                     .map_err(ExecuteInstructionError::CopyToInvalidAddress)?;
             }
 
@@ -360,23 +361,21 @@ impl Interpreter {
                 return Ok(InstructionResult::JumpBlock(block_key.clone()))
             }
             Instruction::JumpIfZero(block_key) => match self.head {
-                Some(ValueBox::Character(_)) => {} // Characters are never equal to 0
-                Some(ValueBox::Number(n)) => {
-                    if n == 0 {
-                        return Ok(InstructionResult::JumpBlock(block_key.clone()));
-                    }
+                Some(ValueBox::Number(0)) => {
+                    return Ok(InstructionResult::JumpBlock(block_key.clone()));
                 }
+                Some(ValueBox::Character(_)) => {} // Characters are never equal to 0
+                Some(ValueBox::Number(_)) => {}    // Number != 0 => do nothing
                 _ => {
                     return Err(ExecuteInstructionError::JumpIfZeroInvalidHead(self.head));
                 }
             },
             Instruction::JumpIfNegative(block_key) => match self.head {
-                Some(ValueBox::Character(_)) => {} // Characters are never negative
-                Some(ValueBox::Number(n)) => {
-                    if n < 0 {
-                        return Ok(InstructionResult::JumpBlock(block_key.clone()));
-                    }
+                Some(ValueBox::Number(n)) if n < 0 => {
+                    return Ok(InstructionResult::JumpBlock(block_key.clone()));
                 }
+                Some(ValueBox::Character(_)) => {} // Characters are never negative
+                Some(ValueBox::Number(_)) => {}    // Number >= 0 => do nothing
                 _ => {
                     return Err(ExecuteInstructionError::JumpIfNegativeInvalidHead(
                         self.head,
@@ -397,10 +396,10 @@ impl Interpreter {
             .get_with_vbma(vbma)
             .map_err(ExecuteInstructionError::BumpInvalidAddress)?;
 
-        let new_value = match (mem_value, up) {
-            (ValueBox::Number(m), true) => m + 1,
-            (ValueBox::Number(m), false) => m - 1,
-            (ValueBox::Character(_), _) => return Err(ExecuteInstructionError::BumpCharacter),
+        let new_value = match mem_value {
+            ValueBox::Number(m) if up => m + 1,
+            ValueBox::Number(m) => m - 1,
+            ValueBox::Character(_) => return Err(ExecuteInstructionError::BumpCharacter),
         };
 
         self.memory

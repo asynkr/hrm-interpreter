@@ -36,9 +36,9 @@ impl FromStr for ValueBox {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s: &str = &s.replace(' ', "");
-        match (s.parse::<i32>(), s.len()) {
-            (Ok(value), _) => Ok(Self::Number(value)),
-            (Err(_), 1) => {
+        match s.parse::<i32>() {
+            Ok(value) => Ok(Self::Number(value)),
+            Err(_) if s.len() == 1 => {
                 let c = s.chars().next().unwrap();
                 Ok(Self::Character(c))
             }
